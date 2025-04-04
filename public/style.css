@@ -128,3 +128,65 @@ h1 {
     min-height: 1.2em;
     width: 100%; /* Take full width */
 }
+
+/* --- Responsive Styles for Smaller Screens --- */
+@media (max-width: 640px) { /* Target phones and small tablets */
+
+    body {
+        padding: 10px; /* Reduce body padding */
+    }
+
+    h1 {
+        font-size: 1.5em; /* Slightly smaller title */
+    }
+
+    /* Make info bar and controls take up more screen width */
+    #info-bar,
+    #controls {
+        width: 95%; /* Use percentage width */
+        max-width: none; /* Remove max-width restriction */
+    }
+
+    #info-bar {
+        font-size: 0.9em; /* Slightly smaller text in info bar */
+        padding: 5px;
+    }
+
+    .player-info {
+        padding: 3px 6px;
+    }
+
+    /* Allow canvas element to scale down */
+    #game-canvas {
+        max-width: 100%; /* Ensure canvas doesn't overflow its container */
+        height: auto;   /* Maintain aspect ratio */
+        /* The actual drawing inside remains 600x550, but the element scales */
+    }
+
+    /* Enlarge color buttons */
+    #color-buttons-container button {
+        width: 55px;  /* Larger tap target */
+        height: 55px;
+        flex-basis: 55px; /* Help with wrapping */
+    }
+
+    #color-buttons-container {
+        gap: 8px; /* Adjust gap slightly */
+    }
+
+     #game-status {
+        font-size: 0.9em;
+     }
+}
+
+/* Further adjustments for very small screens if needed */
+@media (max-width: 380px) {
+     #color-buttons-container button {
+        width: 50px;
+        height: 50px;
+        flex-basis: 50px;
+    }
+     #info-bar {
+        font-size: 0.8em;
+    }
+}
