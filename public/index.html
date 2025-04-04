@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HexStorm</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>HexStorm</h1>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="controls">
+            <!-- Color selection buttons will go here -->
+            <p>Player 1 Score: <span id="player1-score">0</span></p>
+            <p>Player 2 Score: <span id="player2-score">0</span></p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script> <!-- Include Socket.IO client library -->
+    <script src="client.js"></script>
+</body>
+</html>

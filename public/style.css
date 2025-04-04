@@ -1,0 +1,99 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Slightly more modern font */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+    background-color: #000000; /* Black background */
+    color: #FFA500; /* Orange text */
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: #FFD700; /* Gold color for title */
+    text-shadow: 1px 1px 3px rgba(255, 165, 0, 0.7); /* Orange glow */
+}
+
+#game-container {
+    display: flex;
+    flex-direction: row; /* Place canvas and controls side-by-side */
+    align-items: flex-start; /* Align items to the top */
+    gap: 20px; /* Space between canvas and controls */
+}
+
+#game-canvas {
+    border: 2px solid rgba(255, 165, 0, 0.8); /* Solid orange border */
+    background-color: #111111; /* Very dark grey canvas background */
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.5); /* Orange glow around canvas */
+}
+
+#controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch; /* Stretch items like buttons */
+    padding: 15px;
+    border: 1px solid rgba(255, 165, 0, 0.5); /* Fainter orange border */
+    background-color: rgba(255, 165, 0, 0.15); /* Very transparent orange background */
+    border-radius: 5px;
+    min-width: 180px; /* Give controls some minimum width */
+    box-shadow: 0 0 10px rgba(255, 165, 0, 0.3); /* Fainter orange glow */
+}
+
+/* Style specific elements within controls */
+#controls #player-indicator,
+#controls #game-status {
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 5px;
+    background-color: rgba(0, 0, 0, 0.3); /* Darker background for status */
+    border-radius: 3px;
+}
+
+#controls p {
+    margin: 8px 0;
+    font-weight: normal; /* Normal weight, color is enough */
+    text-align: center;
+}
+
+#controls p span { /* Target the score/turn spans */
+    font-weight: bold;
+    color: #FFD700; /* Gold for scores/turn */
+}
+
+#color-buttons-container {
+    display: grid; /* Use grid for button layout */
+    grid-template-columns: repeat(3, 1fr); /* 3 columns */
+    gap: 8px; /* Space between buttons */
+    margin-top: 15px;
+}
+
+/* Style the color buttons themselves */
+#controls #color-buttons-container button {
+    /* Remove previous button styles */
+    padding: 0;
+    font-size: inherit; /* Not needed */
+    color: inherit; /* Not needed */
+    text-shadow: none; /* Not needed */
+
+    /* New styles */
+    width: 100%; /* Fill grid cell */
+    height: 45px; /* Taller buttons */
+    border: 1px solid rgba(255, 255, 255, 0.4); /* Light border */
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease; /* Smooth transition */
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.4); /* Inner shadow */
+}
+
+#controls #color-buttons-container button:hover:not(:disabled) {
+    opacity: 1; /* Full opacity on hover */
+    border-color: #FFFFFF; /* White border on hover */
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.7); /* Gold glow on hover */
+}
+
+#controls #color-buttons-container button:disabled {
+    opacity: 0.3; /* More faded when disabled */
+    cursor: not-allowed;
+    box-shadow: none; /* No shadow when disabled */
+}
