@@ -1,5 +1,5 @@
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Slightly more modern font */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -10,90 +10,121 @@ body {
 }
 
 h1 {
-    margin-bottom: 20px;
+    margin-bottom: 15px; /* Reduced margin */
     color: #FFD700; /* Gold color for title */
     text-shadow: 1px 1px 3px rgba(255, 165, 0, 0.7); /* Orange glow */
 }
 
-#game-container {
+/* NEW: Info Bar Styling */
+#info-bar {
     display: flex;
-    flex-direction: row; /* Place canvas and controls side-by-side */
-    align-items: flex-start; /* Align items to the top */
-    gap: 20px; /* Space between canvas and controls */
+    justify-content: space-between; /* Pushes P1 left, P2 right */
+    align-items: center;
+    width: 500px; /* Match canvas width */
+    padding: 5px 10px; /* Add some padding */
+    margin-bottom: 10px; /* Space below info bar */
+    background-color: rgba(255, 165, 0, 0.1); /* Very light orange tint */
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    border-radius: 4px;
+    box-sizing: border-box; /* Include padding/border in width */
+}
+
+/* NEW: Player Info Block Styling */
+.player-info {
+    padding: 5px 10px;
+    border: 2px solid transparent; /* Placeholder for highlight */
+    border-radius: 4px;
+    transition: all 0.3s ease; /* Smooth transition for highlight */
+    text-align: center;
+}
+
+.player-info .score {
+    font-weight: bold;
+    color: #FFD700; /* Gold for scores */
+    margin-left: 5px; /* Space between label and score */
+}
+
+.player-info .player-id {
+    font-style: italic;
+    font-size: 0.9em;
+    color: #CCCCCC; /* Lighter color for 'You are...' */
+    display: block; /* Put on new line */
+    margin-top: 3px;
+}
+
+/* NEW: Active Player Highlight */
+.player-info.active-player {
+    border-color: #FFD700; /* Gold border */
+    background-color: rgba(255, 215, 0, 0.2); /* Light gold background */
+    font-weight: bold; /* Make player name bold */
+}
+
+/* MODIFIED: Game Container - now just holds canvas */
+#game-container {
+    margin-bottom: 15px; /* Space below canvas */
 }
 
 #game-canvas {
-    border: 2px solid rgba(255, 165, 0, 0.8); /* Solid orange border */
-    background-color: #111111; /* Very dark grey canvas background */
-    box-shadow: 0 0 15px rgba(255, 165, 0, 0.5); /* Orange glow around canvas */
+    display: block; /* Prevents extra space below canvas */
+    border: 2px solid rgba(255, 165, 0, 0.8);
+    background-color: #111111;
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+    /* Width/Height set in JS */
 }
 
+/* MODIFIED: Controls - now below canvas, centered */
 #controls {
     display: flex;
-    flex-direction: column;
-    align-items: stretch; /* Stretch items like buttons */
-    padding: 15px;
-    border: 1px solid rgba(255, 165, 0, 0.5); /* Fainter orange border */
-    background-color: rgba(255, 165, 0, 0.15); /* Very transparent orange background */
-    border-radius: 5px;
-    min-width: 180px; /* Give controls some minimum width */
-    box-shadow: 0 0 10px rgba(255, 165, 0, 0.3); /* Fainter orange glow */
+    flex-direction: column; /* Stack buttons above status */
+    align-items: center; /* Center items horizontally */
+    width: 100%; /* Take full width */
+    max-width: 500px; /* Limit width like canvas */
+    padding: 0; /* Remove padding */
+    border: none; /* Remove border */
+    background-color: transparent; /* Remove background */
+    box-shadow: none; /* Remove shadow */
 }
 
-/* Style specific elements within controls */
-#controls #player-indicator,
-#controls #game-status {
-    text-align: center;
-    margin-bottom: 15px;
-    padding: 5px;
-    background-color: rgba(0, 0, 0, 0.3); /* Darker background for status */
-    border-radius: 3px;
-}
-
-#controls p {
-    margin: 8px 0;
-    font-weight: normal; /* Normal weight, color is enough */
-    text-align: center;
-}
-
-#controls p span { /* Target the score/turn spans */
-    font-weight: bold;
-    color: #FFD700; /* Gold for scores/turn */
-}
-
+/* MODIFIED: Color Buttons Container - single row */
 #color-buttons-container {
-    display: grid; /* Use grid for button layout */
-    grid-template-columns: repeat(3, 1fr); /* 3 columns */
-    gap: 8px; /* Space between buttons */
-    margin-top: 15px;
+    display: flex; /* Use flexbox for a row */
+    flex-direction: row;
+    justify-content: center; /* Center buttons horizontally */
+    flex-wrap: wrap; /* Allow wrapping if needed */
+    gap: 10px; /* Space between buttons */
+    margin-bottom: 10px; /* Space below buttons */
+    width: 100%; /* Fill controls width */
 }
 
-/* Style the color buttons themselves */
-#controls #color-buttons-container button {
-    /* Remove previous button styles */
-    padding: 0;
-    font-size: inherit; /* Not needed */
-    color: inherit; /* Not needed */
-    text-shadow: none; /* Not needed */
-
-    /* New styles */
-    width: 100%; /* Fill grid cell */
-    height: 45px; /* Taller buttons */
-    border: 1px solid rgba(255, 255, 255, 0.4); /* Light border */
-    border-radius: 4px;
+/* MODIFIED: Color Buttons Styling */
+#color-buttons-container button {
+    width: 45px; /* Fixed width */
+    height: 45px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 5px; /* Slightly more rounded */
     cursor: pointer;
-    transition: all 0.2s ease; /* Smooth transition */
-    box-shadow: inset 0 0 5px rgba(0,0,0,0.4); /* Inner shadow */
+    transition: all 0.2s ease;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.4);
+    padding: 0; /* Ensure no extra padding */
+    flex-shrink: 0; /* Prevent buttons from shrinking */
 }
 
-#controls #color-buttons-container button:hover:not(:disabled) {
-    opacity: 1; /* Full opacity on hover */
-    border-color: #FFFFFF; /* White border on hover */
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.7); /* Gold glow on hover */
+#color-buttons-container button:hover:not(:disabled) {
+    border-color: #FFFFFF;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
 }
 
-#controls #color-buttons-container button:disabled {
-    opacity: 0.3; /* More faded when disabled */
+#color-buttons-container button:disabled {
+    opacity: 0.3;
     cursor: not-allowed;
-    box-shadow: none; /* No shadow when disabled */
+    box-shadow: none;
+}
+
+/* MODIFIED: Game Status - now below buttons */
+#game-status {
+    text-align: center;
+    padding: 5px;
+    margin-top: 10px; /* Added margin-top */
+    min-height: 1.2em;
+    width: 100%; /* Take full width */
 }

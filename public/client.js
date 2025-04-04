@@ -5,22 +5,27 @@ const socket = io(); // Connect to the server
 // --- DOM Elements ---
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
+const infoBarDiv = document.getElementById('info-bar'); // New info bar
 const controlsDiv = document.getElementById('controls');
-// Placeholders for elements within controlsDiv (will be populated in init)
+const colorButtonsContainer = document.getElementById('color-buttons-container'); // Direct reference
+const gameStatusDiv = document.getElementById('game-status'); // Direct reference
+
+// Placeholders for elements within infoBarDiv (will be populated in init)
+let player1InfoDiv = null;
+let player2InfoDiv = null;
 let player1ScoreSpan = null;
 let player2ScoreSpan = null;
-let turnIndicatorSpan = null;
-let gameStatusDiv = null;
-let colorButtonsContainer = null;
+// Removed: turnIndicatorSpan
 
 // --- Constants ---
-const HEX_SIZE = 25; // Radius of a hexagon tile
 const AVAILABLE_COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
-const CANVAS_WIDTH = 500;
-const CANVAS_HEIGHT = 500;
+// ... (rest of constants are the same)
+const HEX_SIZE = 20; // Reduced size slightly for larger board visibility
+const CANVAS_WIDTH = 600; // Increased canvas size
+const CANVAS_HEIGHT = 550; // Increased canvas size
 const ORIGIN_X = CANVAS_WIDTH / 2;
 const ORIGIN_Y = CANVAS_HEIGHT / 2;
-const HIGHLIGHT_DURATION = 400; // ms for capture animation
+const HIGHLIGHT_DURATION = 400;
 
 // --- Canvas Setup ---
 canvas.width = CANVAS_WIDTH;
@@ -146,22 +151,13 @@ function updateColorButtons() {
         const button = document.createElement('button');
         button.textContent = '';
         button.style.backgroundColor = color;
-        button.style.margin = '3px';
-        button.style.width = '40px';
-        button.style.height = '40px';
-        button.style.border = '1px solid #555';
-        button.style.borderRadius = '4px';
+        // Button styles are now primarily handled by CSS
         button.onclick = () => selectColor(color);
 
         if (!isMyTurn || color === currentPlayerColor || color === opponentColor) {
             button.disabled = true;
-            button.style.opacity = '0.5';
-            button.style.cursor = 'not-allowed';
         } else {
              button.style.cursor = 'pointer';
-             // Subtle hover effect for enabled buttons
-             button.onmouseenter = () => button.style.boxShadow = '0 0 5px #FFF';
-             button.onmouseleave = () => button.style.boxShadow = 'none';
         }
 
         colorButtonsContainer.appendChild(button);
@@ -169,43 +165,60 @@ function updateColorButtons() {
 }
 
 function updateUI() {
-    if (!gameState || !gameState.players || !player1ScoreSpan) {
+    // Check if player info divs are ready
+    if (!gameState || !gameState.players || !player1InfoDiv || !player2InfoDiv) {
         console.log("UI elements or game state not ready for update.");
         return;
     }
 
+    // Update Scores
     const p1Score = gameState.players.player1?.score ?? '0';
     const p2Score = gameState.players.player2?.score ?? '0';
     player1ScoreSpan.textContent = p1Score;
     player2ScoreSpan.textContent = p2Score;
 
-    if (gameState.winner) {
-        turnIndicatorSpan.textContent = `${gameState.winner} wins!`;
-        turnIndicatorSpan.style.fontWeight = 'bold';
-    } else if (gameState.gameStarted) {
-        turnIndicatorSpan.textContent = `Turn: ${gameState.turn}`;
-        turnIndicatorSpan.style.fontWeight = (gameState.turn === playerNumber) ? 'bold' : 'normal';
-    } else {
-        turnIndicatorSpan.textContent = "Waiting...";
-        turnIndicatorSpan.style.fontWeight = 'normal';
+    // Update Active Player Highlight
+    player1InfoDiv.classList.remove('active-player');
+    player2InfoDiv.classList.remove('active-player');
+
+    if (gameState.gameStarted && !gameState.winner) {
+        if (gameState.turn === 'player1') {
+            player1InfoDiv.classList.add('active-player');
+        } else if (gameState.turn === 'player2') {
+            player2InfoDiv.classList.add('active-player');
+        }
     }
 
+    // Update "You are Player X / Spectating" status
+    const p1IdSpan = player1InfoDiv.querySelector('.player-id');
+    const p2IdSpan = player2InfoDiv.querySelector('.player-id');
+    p1IdSpan.textContent = ''; // Clear previous
+    p2IdSpan.textContent = ''; // Clear previous
+
+    if (playerNumber === 'player1') {
+        p1IdSpan.textContent = '(You)';
+    } else if (playerNumber === 'player2') {
+        p2IdSpan.textContent = '(You)';
+    } else if (isSpectator) {
+        // Optionally show spectator status somewhere, maybe gameStatusDiv
+        // displayGameStatus("Spectating game."); // Already handled elsewhere
+    }
+
+
+    // Update Color Buttons (handles enabling/disabling based on state)
     updateColorButtons();
 
-    if (!gameState.winner && gameStatusDiv.textContent.startsWith('Error:')) {
-         displayGameStatus(gameState.gameStarted ? 'Game in progress' : 'Waiting for opponent...');
-    } else if (!gameState.winner && !gameState.gameStarted) {
-         displayGameStatus('Waiting for opponent...');
-    } else if (!gameState.winner && gameState.gameStarted) {
-         displayGameStatus('Game in progress');
+    // Update general status message
+    if (gameState.winner) {
+        displayGameStatus(`${gameState.winner} wins! Resetting soon...`);
+    } else if (!gameState.gameStarted) {
+        displayGameStatus('Waiting for opponent...');
+    } else {
+        // Clear status if game is running and no error/winner
+         if (!gameStatusDiv.textContent.startsWith('Error:')) {
+            displayGameStatus('Game in progress');
+         }
     }
-
-     const playerIndicator = document.getElementById('player-indicator');
-     if (playerIndicator) {
-         if (playerNumber) playerIndicator.textContent = `You are ${playerNumber}`;
-         else if (isSpectator) playerIndicator.textContent = `You are spectating`;
-         else playerIndicator.textContent = `Connecting...`;
-     }
 }
 
 // --- Coordinate & Drawing Functions ---
@@ -392,33 +405,32 @@ function handleMouseOut(event) {
 function init() {
     console.log("Initializing client...");
 
-    // Setup controlsDiv structure
-    controlsDiv.innerHTML = `
-        <div id="player-indicator" style="margin-bottom: 10px; font-style: italic;">Connecting...</div>
-        <div id="game-status" style="margin-bottom: 10px; min-height: 1.2em;">Waiting for server...</div>
-        <p>P1 Score: <span id="player1-score">0</span></p>
-        <p>P2 Score: <span id="player2-score">0</span></p>
-        <p><span id="turn-indicator">Waiting...</span></p>
-        <div id="color-buttons-container" style="margin-top: 15px;">
-            <!-- Buttons will be added dynamically -->
+    // Setup info-bar structure
+    infoBarDiv.innerHTML = `
+        <div id="player1-info" class="player-info">
+            Player 1: <span class="score" id="player1-score">0</span>
+            <span class="player-id"></span>
+        </div>
+        <div id="player2-info" class="player-info">
+            Player 2: <span class="score" id="player2-score">0</span>
+            <span class="player-id"></span>
         </div>
     `;
 
     // Get references to the newly created elements
-    player1ScoreSpan = document.getElementById('player1-score');
-    player2ScoreSpan = document.getElementById('player2-score');
-    turnIndicatorSpan = document.getElementById('turn-indicator');
-    gameStatusDiv = document.getElementById('game-status');
-    colorButtonsContainer = document.getElementById('color-buttons-container');
+    player1InfoDiv = document.getElementById('player1-info');
+    player2InfoDiv = document.getElementById('player2-info');
+    player1ScoreSpan = document.getElementById('player1-score'); // Already scoped correctly
+    player2ScoreSpan = document.getElementById('player2-score'); // Already scoped correctly
+    // References to colorButtonsContainer and gameStatusDiv are already set globally
 
     // Add event listeners for hover effect
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseout', handleMouseOut);
 
-
     displayGameStatus("Connecting...");
-    updateColorButtons();
-    drawBoard();
+    updateColorButtons(); // Initial call
+    drawBoard(); // Initial draw
 }
 
 init();

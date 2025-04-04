@@ -8,13 +8,23 @@
 </head>
 <body>
     <h1>HexStorm</h1>
+
+    <!-- Info Bar Above Canvas -->
+    <div id="info-bar">
+        <!-- Player info will be populated by client.js -->
+    </div>
+
+    <!-- Game Canvas Container -->
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
-        <div id="controls">
-            <!-- Color selection buttons will go here -->
-            <p>Player 1 Score: <span id="player1-score">0</span></p>
-            <p>Player 2 Score: <span id="player2-score">0</span></p>
+    </div>
+
+    <!-- Controls Below Canvas -->
+    <div id="controls">
+        <div id="color-buttons-container">
+            <!-- Buttons will be added dynamically -->
         </div>
+        <div id="game-status" style="margin-top: 15px; text-align: center;">Connecting...</div> <!-- Moved status here -->
     </div>
 
     <script src="/socket.io/socket.io.js"></script> <!-- Include Socket.IO client library -->
