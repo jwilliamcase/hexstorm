@@ -223,6 +223,21 @@ function updateUI() {
 
 // --- Coordinate & Drawing Functions ---
 
+// NEW: Axial directions for neighbor calculation
+const axialDirections = [
+    { q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 1 },
+    { q: -1, r: 0 }, { q: 0, r: -1 }, { q: 1, r: -1 }
+];
+
+// NEW: Helper function to get neighbors
+function getHexNeighbors(q, r) {
+    const neighbors = [];
+    axialDirections.forEach(dir => {
+        neighbors.push({ q: q + dir.q, r: r + dir.r });
+    });
+    return neighbors;
+}
+
 // Converts axial coordinates (q, r) to pixel coordinates (x, y)
 function axialToPixel(q, r) {
     let drawQ = q;
@@ -344,6 +359,7 @@ function drawBoard() {
         return;
     }
 
+    // --- Draw all hex bodies and standard borders first ---
     Object.values(gameState.board).forEach(hexData => {
         if (hexData && typeof hexData.q !== 'undefined' && typeof hexData.r !== 'undefined') {
              const key = `${hexData.q},${hexData.r}`;
@@ -354,6 +370,40 @@ function drawBoard() {
              console.error("DEBUG: drawBoard - Invalid hexData found:", hexData);
         }
     });
+
+    // --- NEW: Draw Territory Boundaries ---
+    ctx.lineWidth = 3; // Thicker line for boundaries
+
+    Object.values(gameState.board).forEach(hexData => {
+        if (!hexData || !hexData.owner) return; // Skip empty or unowned hexes
+
+        const { q, r, owner } = hexData;
+        const playerColor = gameState.players[owner]?.color;
+        if (!playerColor) return; // Skip if player color is somehow missing
+
+        const center = axialToPixel(q, r);
+        const neighbors = getHexNeighbors(q, r);
+
+        ctx.strokeStyle = playerColor; // Set the stroke color for this player's boundary
+
+        for (let i = 0; i < 6; i++) {
+            const neighborCoords = neighbors[i];
+            const neighborKey = `${neighborCoords.q},${neighborCoords.r}`;
+            const neighborHex = gameState.board[neighborKey];
+
+            // Draw boundary edge if neighbor doesn't exist or is not owned by the same player
+            if (!neighborHex || neighborHex.owner !== owner) {
+                const corner1 = hexCorner(center, HEX_SIZE, i);
+                const corner2 = hexCorner(center, HEX_SIZE, (i + 1) % 6); // Next corner
+
+                ctx.beginPath();
+                ctx.moveTo(corner1.x, corner1.y);
+                ctx.lineTo(corner2.x, corner2.y);
+                ctx.stroke();
+            }
+        }
+    });
+    // --- End NEW Section ---
 }
 
 // --- Player Actions ---
