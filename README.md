@@ -33,14 +33,21 @@ A real-time two-player territory capture game played on a hexagonal board. Playe
     *   Color selection buttons below canvas are dynamically enabled/disabled based on game state and rules.
     *   Implemented a "dark mode" theme with black background and orange UI elements.
     *   Player 2's view is rotated 180 degrees so their starting corner appears in the lower-left on their screen.
-    *   **NEW:** Added visual boundary lines around each player's territory using their current color.
+    *   Hexes owned by the current player have a persistent white border for better visibility.
 *   **Debugging:** Added console logs for troubleshooting state updates and rendering.
+*   **Development:** Added `nodemon` for automatic server restarts during local development (`npm run dev`).
 
 ## How to Run Locally
 
 1.  Navigate to the `gemini/hexstorm` directory.
-2.  Install dependencies: `npm install`
-3.  Start the server: `node server.js`
+2.  Install dependencies (including `nodemon` for development):
+    ```bash
+    npm install
+    ```
+3.  Start the development server (automatically restarts on file changes):
+    ```bash
+    npm run dev
+    ```
 4.  Open two browser tabs/windows to `http://localhost:3000`. The first tab will be Player 1, the second Player 2. Subsequent tabs will be spectators.
 
 ## Deployment to Render.com (Free Tier)
@@ -56,11 +63,12 @@ Render.com can host Node.js web services. Here's a basic guide:
     *   Make sure `package.json` includes a `start` script:
         ```json
         "scripts": {
-          "start": "node server.js"
+          "start": "node server.js",
+          "dev": "nodemon server.js"
           // other scripts...
         },
         ```
-    *   Ensure your `server.js` uses `process.env.PORT` for the port number, falling back to a default for local development:
+    *   Ensure your `server.js` uses `process.env.PORT` for the port number, falling back to a default (e.g., 3000) for local development:
         ```javascript
         const PORT = process.env.PORT || 3000;
         server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
@@ -77,8 +85,8 @@ Render.com can host Node.js web services. Here's a basic guide:
         *   **Branch:** Select the branch to deploy (e.g., `main`).
         *   **Root Directory:** Leave blank if `package.json` is in the root, otherwise specify the path (e.g., `gemini/hexstorm` if your repo root is the parent directory). **Important:** Based on your setup, this might need to be `gemini/hexstorm`. Double-check where `package.json` is relative to the repo root.
         *   **Runtime:** Select `Node`.
-        *   **Build Command:** `npm install`
-        *   **Start Command:** `npm start` (or `node server.js` if you didn't use the start script)
+        *   **Build Command:** `npm install` (This installs both production and dev dependencies by default on Render, but `nodemon` won't be used by the start command).
+        *   **Start Command:** `npm start` (This uses the `start` script defined in `package.json`).
         *   **Plan:** Select the "Free" tier. Note free tier services spin down after inactivity and may take a moment to start on the first request.
 4.  **Deploy:**
     *   Click "Create Web Service".
