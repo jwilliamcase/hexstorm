@@ -24,21 +24,27 @@ const NUM_STARS = 150;
 const STAR_COLORS = ['rgba(255, 215, 0, 0.7)', 'rgba(255, 165, 0, 0.6)', 'rgba(200, 200, 255, 0.5)', 'rgba(150, 150, 200, 0.4)'];
 let lastStarTimestamp = 0;
 
-// --- Flood Fill Pulse Animation State ---
-let isAnimatingPulse = false;
-let pulseStartTime = 0;
-const PULSE_DURATION = 350; // ms
-let hexesToPulse = [];
+// --- Capture Wave Animation State ---
+let isAnimatingWave = false;
+let waveAnimationId = null;
+let waveStartTime = 0;
+const WAVE_ANIMATION_DURATION = 1500; // ms - How long the wave takes to travel
+const WAVE_WIDTH = 2.5; // How many hex distances the wave effect covers
+const WAVE_MAX_SCALE = 1.15; // Max size increase (1.0 = normal)
+const WAVE_MAX_SHADOW_BLUR = 10;
+const WAVE_MAX_SHADOW_ALPHA = 0.6;
+let waveHexData = []; // Stores {q, r, distance} for owned hexes
+let maxWaveDistance = 0;
 
 // --- Win/Lose Animation State ---
 let isGameOver = false;
 let isWinner = null; // true, false, or null
 let winAnimationId = null;
 let winAnimationStartTime = 0;
-const WIN_ANIMATION_DURATION = 4000; // ms (slightly less than server reset delay)
+const WIN_ANIMATION_DURATION = 4000; // ms
 let loseColorsApplied = false;
-const LOSE_COLOR = '#8B4513'; // SaddleBrown - a dull brown
-const LOSE_COLOR_ALT = '#A0522D'; // Sienna - another brown
+const LOSE_COLOR = '#8B4513';
+const LOSE_COLOR_ALT = '#A0522D';
 
 // --- Constants ---
 const AVAILABLE_COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
@@ -47,6 +53,11 @@ const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 550;
 const ORIGIN_X = CANVAS_WIDTH / 2;
 const ORIGIN_Y = CANVAS_HEIGHT / 2;
+// Axial directions (q, r) for neighbors - used in BFS
+const AXIAL_DIRECTIONS = [
+    { q: +1, r: 0 }, { q: +1, r: -1 }, { q: 0, r: -1 },
+    { q: -1, r: 0 }, { q: -1, r: +1 }, { q: 0, r: +1 }
+];
 
 // --- Canvas Setup ---
 canvas.width = CANVAS_WIDTH;
@@ -86,18 +97,28 @@ socket.on('spectator', (status) => {
 
 socket.on('gameState', (newState) => {
     console.log('Received game state update');
-    const wasGameOver = isGameOver; // Check previous game over state
+    const wasGameOver = isGameOver;
     previousGameState = gameState;
     gameState = newState;
 
+    let justCaptured = false;
+    // Check if a capture just happened (score increased for the player who moved)
+    if (!isGameOver && previousGameState && previousGameState.turn && 
+        gameState.players[previousGameState.turn] && previousGameState.players[previousGameState.turn] &&
+        gameState.players[previousGameState.turn].score > previousGameState.players[previousGameState.turn].score) {
+        justCaptured = previousGameState.turn === playerNumber; // Did *I* just capture?
+    }
+
     // --- Handle Game Over Start/End --- 
     if (!previousGameState?.winner && newState.winner) {
-        // Game just ended
         console.log(`Game Over. Winner: ${newState.winner}`);
         isGameOver = true;
         isWinner = (newState.winner === playerNumber);
-        loseColorsApplied = false; // Reset lose effect flag
-        if (winAnimationId) cancelAnimationFrame(winAnimationId); // Stop previous win anim if any
+        loseColorsApplied = false;
+        if (winAnimationId) cancelAnimationFrame(winAnimationId);
+        if (waveAnimationId) cancelAnimationFrame(waveAnimationId); // Stop wave anim if game ends
+        waveAnimationId = null;
+        isAnimatingWave = false;
 
         if (!isSpectator) {
             if (isWinner) {
@@ -107,44 +128,32 @@ socket.on('gameState', (newState) => {
             }
         }
     } else if (previousGameState?.winner && !newState.winner) {
-        // Game just reset
         console.log("Game reset.");
         isGameOver = false;
         isWinner = null;
         loseColorsApplied = false;
-        if (winAnimationId) {
-            cancelAnimationFrame(winAnimationId);
-            winAnimationId = null;
-        }
+        if (winAnimationId) cancelAnimationFrame(winAnimationId);
+        winAnimationId = null;
+        // Wave animation state should already be clear, but double check
+        isAnimatingWave = false;
+        waveAnimationId = null;
     }
     // --- End Handle Game Over ---
 
     updateUI(); // Update scores, status messages, buttons
     
-    // Only draw board immediately if not in a win animation (which handles its own drawing)
-    if (!winAnimationId) {
+    // --- Trigger Capture Wave Animation --- 
+    if (justCaptured && !isGameOver && !isAnimatingWave) {
+        // Start wave animation if this player just captured and game isn't over
+        startWaveAnimation(); // Uses global gameState
+    }
+    // --- End Trigger Capture Wave --- 
+
+    // Draw board only if no animations are running
+    // Wave and Win animations handle their own drawing loops
+    if (!isAnimatingWave && !winAnimationId) {
         drawBoard(); 
     }
-
-    // --- Trigger Pulse Animation (only if game is running) ---
-    if (!isGameOver && previousGameState && previousGameState.board && gameState.board && playerNumber && !isSpectator) {
-        const newlyCapturedHexes = [];
-        const currentPlayer = gameState.players[playerNumber];
-        const previousPlayer = previousGameState.players[playerNumber];
-        if (previousGameState.turn === playerNumber && currentPlayer && previousPlayer && currentPlayer.score > previousPlayer.score) {
-            Object.keys(gameState.board).forEach(key => {
-                const currentHex = gameState.board[key];
-                const previousHex = previousGameState.board[key];
-                if (currentHex.owner === playerNumber && (!previousHex || previousHex.owner !== playerNumber)) {
-                    newlyCapturedHexes.push({ q: currentHex.q, r: currentHex.r });
-                }
-            });
-        }
-        if (newlyCapturedHexes.length > 0) {
-            startFloodFillPulseAnimation(newlyCapturedHexes);
-        }
-    }
-    // --- End Trigger Pulse Animation ---
 });
 
 socket.on('gameError', (error) => {
@@ -154,21 +163,20 @@ socket.on('gameError', (error) => {
 
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
-    // Reset all state on disconnect
+    // Reset all state
     gameState = null;
     previousGameState = null;
     playerNumber = null;
     isSpectator = false;
     hoveredHexKey = null;
-    isAnimatingPulse = false;
-    hexesToPulse = [];
     isGameOver = false;
     isWinner = null;
     loseColorsApplied = false;
-    if (winAnimationId) {
-        cancelAnimationFrame(winAnimationId);
-        winAnimationId = null;
-    }
+    if (winAnimationId) cancelAnimationFrame(winAnimationId);
+    winAnimationId = null;
+    if (waveAnimationId) cancelAnimationFrame(waveAnimationId);
+    waveAnimationId = null;
+    isAnimatingWave = false;
     displayGameStatus("Disconnected from server.");
     updateColorButtons();
     drawBoard();
@@ -182,8 +190,8 @@ function displayGameStatus(message) {
 function updateColorButtons() {
     if (!colorButtonsContainer) return;
     colorButtonsContainer.innerHTML = '';
-    // Buttons only available during active play
-    if (isSpectator || !gameState || !gameState.gameStarted || gameState.winner || gameState.turn !== playerNumber || isGameOver) {
+    // Buttons only available during active play (not animating, not game over, player's turn)
+    if (isSpectator || !gameState || !gameState.gameStarted || gameState.winner || gameState.turn !== playerNumber || isGameOver || isAnimatingWave) {
         return;
     }
     const currentPlayerColor = gameState.players[playerNumber]?.color;
@@ -195,7 +203,7 @@ function updateColorButtons() {
         const button = document.createElement('button');
         button.style.backgroundColor = color;
         button.onclick = () => selectColor(color);
-        button.disabled = false; // Already checked conditions above
+        button.disabled = false;
         button.style.cursor = 'pointer';
         colorButtonsContainer.appendChild(button);
     });
@@ -207,9 +215,9 @@ function updateUI() {
     const p2Score = gameState.players.player2?.score ?? '0';
     player1ScoreSpan.textContent = p1Score;
     player2ScoreSpan.textContent = p2Score;
-    // Active player highlight only if game is running
-    player1InfoDiv.classList.toggle('active-player', gameState.gameStarted && !gameState.winner && gameState.turn === 'player1' && !isGameOver);
-    player2InfoDiv.classList.toggle('active-player', gameState.gameStarted && !gameState.winner && gameState.turn === 'player2' && !isGameOver);
+    // Active player highlight only if game is running and not animating wave
+    player1InfoDiv.classList.toggle('active-player', gameState.gameStarted && !gameState.winner && gameState.turn === 'player1' && !isGameOver && !isAnimatingWave);
+    player2InfoDiv.classList.toggle('active-player', gameState.gameStarted && !gameState.winner && gameState.turn === 'player2' && !isGameOver && !isAnimatingWave);
     const p1IdSpan = player1InfoDiv.querySelector('.player-id');
     const p2IdSpan = player2InfoDiv.querySelector('.player-id');
     p1IdSpan.textContent = (playerNumber === 'player1') ? '(You)' : '';
@@ -225,9 +233,11 @@ function updateUI() {
         // Keep existing error message
     } 
     else if (isGameOver) {
-        // Game over state takes precedence
         displayGameStatus(isWinner ? "You Win!" : "You Lose.");
     } 
+    else if (isAnimatingWave) {
+        displayGameStatus("Capturing..."); // Show status during wave animation
+    }
     else if (!gameState.gameStarted) {
         displayGameStatus('Waiting for opponent...');
     } 
@@ -273,53 +283,58 @@ function hexCorner(center, size, i) {
     return { x: center.x + size * Math.cos(angle_rad), y: center.y + size * Math.sin(angle_rad) };
 }
 
-// Draw a single GAME hexagon
-function drawHex(hexData, isOwnedByCurrentPlayer, isHovered) {
-    const { q, r, owner } = hexData;
-    let displayColor = hexData.color; // Start with the original color
-
-    // Check if lose effect should be applied
-    if (loseColorsApplied && owner === playerNumber) {
-        // Use alternating brown colors for variety
-        displayColor = (q % 2 === r % 2) ? LOSE_COLOR : LOSE_COLOR_ALT;
-    }
-
-    const center = axialToPixel(q, r);
-    const applyHoverEffect = isHovered && owner === playerNumber && !isSpectator && !isGameOver;
-    if (applyHoverEffect) {
-        ctx.save();
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
+// Draw a single GAME hexagon - Modified to be callable with custom size/color for animations
+function drawHexShape(center, size, color, borderColor = '#333333', borderWidth = 1, shadow = null) {
+    ctx.save();
+    if (shadow) {
+        ctx.shadowColor = shadow.color;
+        ctx.shadowBlur = shadow.blur;
+        ctx.shadowOffsetX = shadow.offsetX;
+        ctx.shadowOffsetY = shadow.offsetY;
     }
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-        const corner = hexCorner(center, HEX_SIZE, i);
+        const corner = hexCorner(center, size, i);
         if (i === 0) ctx.moveTo(corner.x, corner.y);
         else ctx.lineTo(corner.x, corner.y);
     }
     ctx.closePath();
-    ctx.fillStyle = displayColor || '#CCCCCC';
+    ctx.fillStyle = color || '#CCCCCC';
     ctx.fill();
-    if (applyHoverEffect) ctx.restore();
-    
-    // Border logic - keep winner highlight even during win animation
+    if (borderWidth > 0) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = borderWidth;
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// Original drawHex function - now uses drawHexShape
+function drawHex(hexData, isOwnedByCurrentPlayer, isHovered) {
+    const { q, r, owner } = hexData;
+    let displayColor = hexData.color;
     let borderColor = '#333333';
     let borderWidth = owner ? 2 : 1;
-    if (isOwnedByCurrentPlayer) {
+
+    if (loseColorsApplied && owner === playerNumber) {
+        displayColor = (q % 2 === r % 2) ? LOSE_COLOR : LOSE_COLOR_ALT;
+        borderColor = '#555555';
+        borderWidth = 1.0;
+    }
+    else if (isOwnedByCurrentPlayer) {
         borderColor = '#FFFFFF';
         borderWidth = 3.0;
     }
-    // Keep loser's border dark during lose effect
-    if (loseColorsApplied && owner === playerNumber) {
-         borderColor = '#555555';
-         borderWidth = 1.0;
+
+    const center = axialToPixel(q, r);
+    // Hover effect disabled during animations
+    const applyHoverEffect = isHovered && owner === playerNumber && !isSpectator && !isGameOver && !isAnimatingWave && !winAnimationId;
+    let shadow = null;
+    if (applyHoverEffect) {
+        shadow = { color: 'rgba(255, 255, 255, 0.7)', blur: 10, offsetX: 0, offsetY: 0 };
     }
 
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = borderWidth;
-    ctx.stroke();
+    drawHexShape(center, HEX_SIZE, displayColor, borderColor, borderWidth, shadow);
 }
 
 // Draw the main game board
@@ -340,7 +355,10 @@ function drawBoard() {
         if (hexData && typeof hexData.q !== 'undefined' && typeof hexData.r !== 'undefined') {
             const isHovered = hoveredHexKey === `${hexData.q},${hexData.r}`;
             const isOwnedByCurrentPlayer = hexData.owner === playerNumber;
-            drawHex(hexData, isOwnedByCurrentPlayer, isHovered);
+            // Skip drawing hexes that will be drawn by the wave animation
+            if (!isAnimatingWave || !waveHexData.some(wh => wh.q === hexData.q && wh.r === hexData.r)) {
+                 drawHex(hexData, isOwnedByCurrentPlayer, isHovered);
+            }
         } else {
             console.error("DEBUG: drawBoard - Invalid hexData found:", hexData);
         }
@@ -349,14 +367,15 @@ function drawBoard() {
 
 // --- Player Actions ---
 function selectColor(color) {
-    if (isSpectator || !gameState || !gameState.gameStarted || gameState.winner || gameState.turn !== playerNumber || isGameOver) return;
+    // Disable actions during animations or game over
+    if (isSpectator || !gameState || !gameState.gameStarted || gameState.winner || gameState.turn !== playerNumber || isGameOver || isAnimatingWave) return;
     console.log(`Sending move: ${color}`);
     socket.emit('playerMove', { color: color });
 }
 
-// --- Mouse Event Handling (disable during game over) ---
+// --- Mouse Event Handling (disable during animations/game over) ---
 function handleMouseMove(event) {
-    if (!gameState || !gameState.board || isSpectator || isGameOver) return;
+    if (!gameState || !gameState.board || isSpectator || isGameOver || isAnimatingWave || winAnimationId) return;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -366,21 +385,21 @@ function handleMouseMove(event) {
     if (gameState.board[newKey]) {
         if (newKey !== hoveredHexKey) {
             hoveredHexKey = newKey;
-            if (!isAnimatingPulse && !winAnimationId) drawBoard();
+            drawBoard(); // Redraw needed only if not animating
         }
     } else {
         if (hoveredHexKey !== null) {
             hoveredHexKey = null;
-            if (!isAnimatingPulse && !winAnimationId) drawBoard();
+            drawBoard(); 
         }
     }
 }
 
 function handleMouseOut(event) {
-     if (isGameOver) return; // Ignore if game is over
+     if (isGameOver || isAnimatingWave || winAnimationId) return; 
     if (hoveredHexKey !== null) {
         hoveredHexKey = null;
-        if (!isAnimatingPulse && !winAnimationId) drawBoard();
+        drawBoard();
     }
 }
 
@@ -435,64 +454,151 @@ function animateHexStarfield(timestamp) {
     requestAnimationFrame(animateHexStarfield);
 }
 
-// --- Flood Fill Pulse Animation ---
-function startFloodFillPulseAnimation(capturedHexes) {
-    if (isAnimatingPulse || isGameOver) return; // Don't run during game over
-    console.log(`Starting pulse animation for ${capturedHexes.length} hexes.`);
-    isAnimatingPulse = true;
-    pulseStartTime = performance.now();
-    hexesToPulse = capturedHexes;
-    requestAnimationFrame(animatePulseStep);
+// --- Capture Wave Animation Functions (NEW) ---
+
+// Helper to get neighbor coordinates
+function getNeighborCoords(q, r) {
+    return AXIAL_DIRECTIONS.map(dir => ({ q: q + dir.q, r: r + dir.r }));
 }
 
-function animatePulseStep(timestamp) {
-    if (!isAnimatingPulse) return;
-    const elapsed = timestamp - pulseStartTime;
-    const progress = Math.min(elapsed / PULSE_DURATION, 1);
-    // Only draw board if win animation isn't also running
-    if (!winAnimationId) drawBoard(); 
-    const maxRadius = HEX_SIZE * 0.8;
-    const currentRadius = maxRadius * progress;
-    const alpha = 1.0 - progress;
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    hexesToPulse.forEach(hexCoords => {
-        const center = axialToPixel(hexCoords.q, hexCoords.r);
-        ctx.beginPath();
-        ctx.arc(center.x, center.y, currentRadius, 0, Math.PI * 2);
-        ctx.fill();
+function startWaveAnimation() {
+    if (!gameState || !playerNumber || isSpectator) return;
+
+    console.log("Starting capture wave animation.");
+    isAnimatingWave = true;
+    waveHexData = [];
+    maxWaveDistance = 0;
+
+    const playerState = gameState.players[playerNumber];
+    if (!playerState || !playerState.startHex) {
+        console.error("Cannot start wave: Player state or start hex missing.");
+        isAnimatingWave = false;
+        return;
+    }
+
+    // BFS to calculate distances from start hex through owned territory
+    const startCoordsArr = playerState.startHex.split(',').map(Number);
+    const startQ = startCoordsArr[0];
+    const startR = startCoordsArr[1];
+
+    const queue = [{ q: startQ, r: startR, distance: 0 }];
+    const visited = new Set([playerState.startHex]);
+    waveHexData.push({ q: startQ, r: startR, distance: 0 });
+
+    let head = 0;
+    while (head < queue.length) {
+        const { q, r, distance } = queue[head++];
+        maxWaveDistance = Math.max(maxWaveDistance, distance);
+
+        const neighbors = getNeighborCoords(q, r);
+        for (const neighbor of neighbors) {
+            const neighborKey = `${neighbor.q},${neighbor.r}`;
+            // Check if neighbor exists, is owned by player, and not visited
+            if (gameState.board[neighborKey] && gameState.board[neighborKey].owner === playerNumber && !visited.has(neighborKey)) {
+                visited.add(neighborKey);
+                const neighborData = { q: neighbor.q, r: neighbor.r, distance: distance + 1 };
+                waveHexData.push(neighborData);
+                queue.push(neighborData);
+            }
+        }
+    }
+
+    if (waveHexData.length <= 1) { // Only start hex? Don't animate.
+        console.log("No territory to animate wave over.");
+        isAnimatingWave = false;
+        drawBoard();
+        return;
+    }
+
+    waveStartTime = performance.now();
+    if (waveAnimationId) cancelAnimationFrame(waveAnimationId);
+    waveAnimationId = requestAnimationFrame(waveAnimationStep);
+    updateUI(); // Update status to "Capturing..."
+}
+
+function waveAnimationStep(timestamp) {
+    if (!isAnimatingWave) { // Stop if flag is cleared
+        waveAnimationId = null;
+        return;
+    }
+
+    const elapsed = timestamp - waveStartTime;
+    const progress = Math.min(elapsed / WAVE_ANIMATION_DURATION, 1);
+
+    // Calculate the leading edge distance of the wave
+    const currentMaxDistanceReached = progress * (maxWaveDistance + WAVE_WIDTH); // Add width to ensure wave travels off the edge
+
+    // Draw the base board state (excluding hexes that will be drawn by the wave)
+    drawBoard(); 
+
+    // --- Draw Wave Effect --- 
+    // Draw hexes affected by the wave on top
+    waveHexData.forEach(hex => {
+        const { q, r, distance } = hex;
+        const diff = currentMaxDistanceReached - distance;
+
+        // Check if the hex is within the current wave band
+        if (diff >= 0 && diff < WAVE_WIDTH) {
+            // Calculate intensity (0 to 1, peaks in middle of wave band)
+            const wavePosition = diff / WAVE_WIDTH; // 0 (leading edge) to 1 (trailing edge)
+            // Use a function that peaks at wavePosition = 0.5 (e.g., sin^2 or similar)
+            const intensity = Math.sin(wavePosition * Math.PI); // Simple sine pulse (0 -> 1 -> 0)
+            
+            const scaleFactor = 1 + (WAVE_MAX_SCALE - 1) * intensity;
+            const shadowBlur = WAVE_MAX_SHADOW_BLUR * intensity;
+            const shadowAlpha = WAVE_MAX_SHADOW_ALPHA * intensity;
+            const shadowOffsetX = 2 * intensity;
+            const shadowOffsetY = 3 * intensity;
+
+            const center = axialToPixel(q, r);
+            const color = gameState.board[`${q},${r}`]?.color || '#CCCCCC'; // Get current color
+            const shadow = {
+                color: `rgba(0, 0, 0, ${shadowAlpha})`,
+                blur: shadowBlur,
+                offsetX: shadowOffsetX,
+                offsetY: shadowOffsetY
+            };
+
+            // Draw the affected hex on top with effects
+            // Use a slightly darker border for the wave effect hex
+            drawHexShape(center, HEX_SIZE * scaleFactor, color, '#444444', 1.5, shadow);
+        }
     });
+    // --- End Wave Effect ---
+
+    // Continue animation?
     if (progress < 1) {
-        requestAnimationFrame(animatePulseStep);
+        waveAnimationId = requestAnimationFrame(waveAnimationStep);
     } else {
-        console.log("Pulse animation finished.");
-        isAnimatingPulse = false;
-        hexesToPulse = [];
-        // Final redraw only if win animation isn't running
-        if (!winAnimationId) drawBoard(); 
+        console.log("Wave animation finished.");
+        isAnimatingWave = false;
+        waveAnimationId = null;
+        waveHexData = [];
+        updateUI(); // Update status back to turn info
+        drawBoard(); // Final clean draw
     }
 }
 
-// --- Win/Lose Effect Functions (NEW) ---
+// --- Win/Lose Effect Functions ---
 
 function applyLoseEffect() {
     console.log("Applying lose effect.");
     loseColorsApplied = true;
-    // No need to modify gameState directly, drawHex will handle it
-    drawBoard(); // Redraw once with loser colors
+    drawBoard(); 
 }
 
 function startWinAnimationLoop() {
-    if (winAnimationId) cancelAnimationFrame(winAnimationId); // Clear previous if any
+    if (winAnimationId) cancelAnimationFrame(winAnimationId);
     console.log("Starting win animation.");
     winAnimationStartTime = performance.now();
     winAnimationId = requestAnimationFrame(winAnimationStep);
 }
 
 function winAnimationStep(timestamp) {
-    if (!isGameOver || !isWinner) { // Stop if game reset or state is wrong
+    if (!isGameOver || !isWinner) {
         if (winAnimationId) cancelAnimationFrame(winAnimationId);
         winAnimationId = null;
-        drawBoard(); // Ensure final clean draw
+        drawBoard();
         return;
     }
 
@@ -500,31 +606,28 @@ function winAnimationStep(timestamp) {
     const progress = elapsed / WIN_ANIMATION_DURATION;
 
     if (progress >= 1) {
-        winAnimationId = null; // Animation finished
-        drawBoard(); // Draw final state
+        winAnimationId = null;
+        drawBoard(); 
         console.log("Win animation finished.");
         return;
     }
 
-    // Draw the base board state first
     drawBoard();
 
-    // --- Draw Celebration Effect --- 
-    // Example: Pulsating glow around winner's hexes
-    const pulseCycle = 1000; // Duration of one pulse cycle in ms
-    const pulseProgress = (elapsed % pulseCycle) / pulseCycle; // 0 to 1 over cycle duration
-    const glowAlpha = 0.3 + Math.sin(pulseProgress * Math.PI) * 0.4; // 0.3 to 0.7 alpha sine wave
-    const glowRadius = HEX_SIZE * (1.0 + Math.sin(pulseProgress * Math.PI) * 0.3); // 1.0x to 1.3x size
+    const pulseCycle = 1000;
+    const pulseProgress = (elapsed % pulseCycle) / pulseCycle;
+    const glowAlpha = 0.3 + Math.sin(pulseProgress * Math.PI) * 0.4;
+    const glowRadius = HEX_SIZE * (1.0 + Math.sin(pulseProgress * Math.PI) * 0.3);
+    const lineWidth = 3 + Math.sin(pulseProgress * Math.PI) * 2;
 
-    ctx.strokeStyle = `rgba(255, 215, 0, ${glowAlpha})`; // Pulsing gold glow (Gold: #FFD700)
-    ctx.lineWidth = 3 + Math.sin(pulseProgress * Math.PI) * 2; // Line width pulses 3 to 5
+    ctx.strokeStyle = `rgba(255, 215, 0, ${glowAlpha})`;
+    ctx.lineWidth = lineWidth;
 
     Object.values(gameState.board).forEach(hexData => {
-        if (hexData.owner === playerNumber) { // Only for winner's hexes
+        if (hexData.owner === playerNumber) {
             const center = axialToPixel(hexData.q, hexData.r);
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
-                // Use hexCorner helper for consistency
                 const corner = hexCorner(center, glowRadius, i);
                 if (i === 0) ctx.moveTo(corner.x, corner.y);
                 else ctx.lineTo(corner.x, corner.y);
@@ -533,9 +636,7 @@ function winAnimationStep(timestamp) {
             ctx.stroke();
         }
     });
-    // --- End Celebration Effect ---
 
-    // Request next frame
     winAnimationId = requestAnimationFrame(winAnimationStep);
 }
 
@@ -544,7 +645,6 @@ function winAnimationStep(timestamp) {
 function init() {
     console.log("Initializing client...");
 
-    // Setup info-bar structure
     infoBarDiv.innerHTML = `
         <div id="player1-info" class="player-info">
             Player 1: <span class="score" id="player1-score">0</span> <span class="player-id"></span>
@@ -558,7 +658,6 @@ function init() {
     player1ScoreSpan = document.getElementById('player1-score');
     player2ScoreSpan = document.getElementById('player2-score');
 
-    // Add event listeners
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseout', handleMouseOut);
 
@@ -566,7 +665,6 @@ function init() {
     updateColorButtons();
     drawBoard();
 
-    // Create and start hex starfield animation
     createHexStarfield();
     lastStarTimestamp = 0;
     requestAnimationFrame(animateHexStarfield);
