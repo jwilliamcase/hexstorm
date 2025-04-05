@@ -28,7 +28,7 @@ let lastStarTimestamp = 0;
 let isAnimatingWave = false;
 let waveAnimationId = null;
 let waveStartTime = 0;
-const WAVE_ANIMATION_DURATION = 1500; // ms - How long the wave takes to travel
+const WAVE_ANIMATION_DURATION = 1000; // ms - Faster duration
 const WAVE_WIDTH = 2.5; // How many hex distances the wave effect covers
 const WAVE_MAX_SCALE = 1.15; // Max size increase (1.0 = normal)
 const WAVE_MAX_SHADOW_BLUR = 10;
@@ -134,7 +134,6 @@ socket.on('gameState', (newState) => {
         loseColorsApplied = false;
         if (winAnimationId) cancelAnimationFrame(winAnimationId);
         winAnimationId = null;
-        // Wave animation state should already be clear, but double check
         isAnimatingWave = false;
         waveAnimationId = null;
     }
@@ -144,13 +143,11 @@ socket.on('gameState', (newState) => {
     
     // --- Trigger Capture Wave Animation --- 
     if (justCaptured && !isGameOver && !isAnimatingWave) {
-        // Start wave animation if this player just captured and game isn't over
         startWaveAnimation(); // Uses global gameState
     }
     // --- End Trigger Capture Wave --- 
 
     // Draw board only if no animations are running
-    // Wave and Win animations handle their own drawing loops
     if (!isAnimatingWave && !winAnimationId) {
         drawBoard(); 
     }
@@ -351,14 +348,12 @@ function drawBoard() {
         ctx.fillText(initialMessage, canvas.width / 2, canvas.height / 2);
         return;
     }
+    // Always draw all hexes in their base state
     Object.values(gameState.board).forEach(hexData => {
         if (hexData && typeof hexData.q !== 'undefined' && typeof hexData.r !== 'undefined') {
             const isHovered = hoveredHexKey === `${hexData.q},${hexData.r}`;
             const isOwnedByCurrentPlayer = hexData.owner === playerNumber;
-            // Skip drawing hexes that will be drawn by the wave animation
-            if (!isAnimatingWave || !waveHexData.some(wh => wh.q === hexData.q && wh.r === hexData.r)) {
-                 drawHex(hexData, isOwnedByCurrentPlayer, isHovered);
-            }
+            drawHex(hexData, isOwnedByCurrentPlayer, isHovered);
         } else {
             console.error("DEBUG: drawBoard - Invalid hexData found:", hexData);
         }
@@ -454,7 +449,7 @@ function animateHexStarfield(timestamp) {
     requestAnimationFrame(animateHexStarfield);
 }
 
-// --- Capture Wave Animation Functions (NEW) ---
+// --- Capture Wave Animation Functions ---
 
 // Helper to get neighbor coordinates
 function getNeighborCoords(q, r) {
@@ -528,11 +523,10 @@ function waveAnimationStep(timestamp) {
     // Calculate the leading edge distance of the wave
     const currentMaxDistanceReached = progress * (maxWaveDistance + WAVE_WIDTH); // Add width to ensure wave travels off the edge
 
-    // Draw the base board state (excluding hexes that will be drawn by the wave)
+    // Draw the base board state first (now draws all hexes)
     drawBoard(); 
 
-    // --- Draw Wave Effect --- 
-    // Draw hexes affected by the wave on top
+    // --- Draw Wave Effect On Top --- 
     waveHexData.forEach(hex => {
         const { q, r, distance } = hex;
         const diff = currentMaxDistanceReached - distance;
@@ -541,7 +535,6 @@ function waveAnimationStep(timestamp) {
         if (diff >= 0 && diff < WAVE_WIDTH) {
             // Calculate intensity (0 to 1, peaks in middle of wave band)
             const wavePosition = diff / WAVE_WIDTH; // 0 (leading edge) to 1 (trailing edge)
-            // Use a function that peaks at wavePosition = 0.5 (e.g., sin^2 or similar)
             const intensity = Math.sin(wavePosition * Math.PI); // Simple sine pulse (0 -> 1 -> 0)
             
             const scaleFactor = 1 + (WAVE_MAX_SCALE - 1) * intensity;
@@ -559,8 +552,7 @@ function waveAnimationStep(timestamp) {
                 offsetY: shadowOffsetY
             };
 
-            // Draw the affected hex on top with effects
-            // Use a slightly darker border for the wave effect hex
+            // Draw the affected hex again, on top, with effects
             drawHexShape(center, HEX_SIZE * scaleFactor, color, '#444444', 1.5, shadow);
         }
     });
