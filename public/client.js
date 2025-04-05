@@ -21,7 +21,6 @@ let player2ScoreSpan = null;
 // --- Hex Starfield Animation State ---
 let hexStars = [];
 const NUM_STARS = 150;
-// New Red/Blue color palette
 const STAR_COLORS = [
     'rgba(255, 50, 50, 0.7)',  // Brighter Red
     'rgba(100, 100, 255, 0.6)', // Brighter Blue
@@ -29,6 +28,9 @@ const STAR_COLORS = [
     'rgba(50, 50, 200, 0.4)'     // Darker Blue
 ];
 let lastStarTimestamp = 0;
+const MIN_STAR_SIZE = 0.5;
+const MAX_STAR_SIZE = 1.5;
+const STAR_GROWTH_RATE = 0.005; // How fast stars grow per frame (adjust as needed)
 
 // --- Capture Wave Animation State ---
 let isAnimatingWave = false;
@@ -54,7 +56,7 @@ const LOSE_COLOR_ALT = '#A0522D';
 
 // --- Emoji Confetti State ---
 const WIN_EMOJIS = ['🦄', '🌈', '⭐', '✨', '🎉'];
-const LOSE_EMOJIS = ['💩', '🧛', '💀', '👻', '👎'];
+const LOSE_EMOJIS = ['💩', '🧛', '💀', '👻', '💩']; // Replaced thumbs down
 const EMOJI_SCALAR = 6; // Controls emoji size
 
 // --- Constants ---
@@ -138,8 +140,9 @@ socket.on('gameState', (newState) => {
                 startWinAnimationLoop();
                 triggerWinConfetti(); // Trigger win confetti
             } else {
+                // Trigger confetti BEFORE applying visual effect
+                triggerLoseConfetti(); 
                 applyLoseEffect();
-                triggerLoseConfetti(); // Trigger lose confetti
             }
         }
     } else if (previousGameState?.winner && !newState.winner) {
@@ -434,27 +437,26 @@ function drawMiniHex(x, y, size, color) {
     bgCtx.fill();
 }
 
+// Function to reset a star's properties
+function resetStar(star) {
+    star.size = MIN_STAR_SIZE + Math.random() * (MAX_STAR_SIZE - MIN_STAR_SIZE);
+    star.x = Math.random() * bgCanvas.width;
+    star.y = Math.random() * bgCanvas.height;
+    const speed = (Math.random() * 0.4 + 0.1) * (star.size / MAX_STAR_SIZE); // Speed slightly tied to size
+    star.dx = (Math.random() - 0.5) * 0.8 * speed; // Adjusted base speed
+    star.dy = (Math.random() - 0.5) * 0.8 * speed;
+    star.color = STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)];
+    star.growthRate = STAR_GROWTH_RATE * (1 + Math.random() * 0.5); // Slightly variable growth
+}
+
 function createHexStarfield() {
     hexStars = [];
     for (let i = 0; i < NUM_STARS; i++) {
-        const size = Math.random() * 2.0 + 0.5; // Range 0.5 to 2.5
-        const baseSpeed = Math.random() * 0.6 + 0.2; // Base speed factor
-        // Speed depends on size (larger = faster)
-        const speedFactor = baseSpeed * (size / 1.5); 
-
-        hexStars.push({
-            x: Math.random() * bgCanvas.width,
-            y: Math.random() * bgCanvas.height,
-            size: size,
-            // Random horizontal direction, speed based on size
-            dx: (Math.random() - 0.5) * 1.0 * speedFactor, 
-            // Random vertical direction (up or down), speed based on size
-            dy: (Math.random() - 0.5) * 1.0 * speedFactor, 
-            // Randomly pick from the new red/blue palette
-            color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)]
-        });
+        const star = {};
+        resetStar(star); // Initialize star with reset logic
+        hexStars.push(star);
     }
-    console.log(`Created ${hexStars.length} hex stars with parallax.`);
+    console.log(`Created ${hexStars.length} hex stars with growth.`);
 }
 
 function animateHexStarfield(timestamp) {
@@ -462,28 +464,32 @@ function animateHexStarfield(timestamp) {
     if (lastStarTimestamp === 0) lastStarTimestamp = timestamp;
     const deltaTime = timestamp - lastStarTimestamp;
     lastStarTimestamp = timestamp;
+    const dtFactor = deltaTime / 16.67; // Normalize speed/growth to ~60fps
 
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
 
     hexStars.forEach(star => {
-        // Move star based on its dx, dy and deltaTime
-        star.x += star.dx * (deltaTime / 16.67); // Normalize speed to ~60fps
-        star.y += star.dy * (deltaTime / 16.67);
+        // Grow the star
+        star.size += star.growthRate * dtFactor;
 
-        // Wrap around edges for continuous field
-        if (star.x < -star.size) {
-            star.x = bgCanvas.width + star.size;
-        } else if (star.x > bgCanvas.width + star.size) {
-            star.x = -star.size;
-        }
-        if (star.y < -star.size) {
-            star.y = bgCanvas.height + star.size;
-        } else if (star.y > bgCanvas.height + star.size) {
-            star.y = -star.size;
-        }
+        // Move the star
+        star.x += star.dx * dtFactor;
+        star.y += star.dy * dtFactor;
 
-        // Draw the hex star
-        drawMiniHex(star.x, star.y, star.size, star.color);
+        // Check if star is completely off-screen
+        const isOffScreen = 
+            star.x < -star.size || 
+            star.x > bgCanvas.width + star.size ||
+            star.y < -star.size ||
+            star.y > bgCanvas.height + star.size;
+
+        if (isOffScreen) {
+            // Reset star if it goes off bounds
+            resetStar(star);
+        } else {
+            // Draw the star if it's on screen
+            drawMiniHex(star.x, star.y, star.size, star.color);
+        }
     });
 
     requestAnimationFrame(animateHexStarfield);
@@ -713,31 +719,27 @@ function triggerLoseConfetti() {
         console.warn("Confetti library not loaded.");
         return;
     }
-    console.log("Triggering LOSE confetti (slime)");
+    console.log("Triggering negative outcome confetti (slime)");
 
     const emojiShapes = LOSE_EMOJIS.map(text => confetti.shapeFromText({ text, scalar: EMOJI_SCALAR }));
 
     const defaults = {
-        spread: 90, // Narrower spread for downward motion
-        ticks: 350, // Longer duration for falling effect
-        gravity: 0.6, // Stronger gravity
-        decay: 0.96,
-        startVelocity: 25, // Increased start velocity
+        angle: 270, // Force downwards
+        spread: 70, // Narrower spread
+        ticks: 600, // Longer duration
+        gravity: 0.6, 
+        decay: 0.92, // Reduced decay
+        startVelocity: 30, // Slightly faster start
         shapes: emojiShapes,
         scalar: EMOJI_SCALAR,
         origin: { x: 0.5, y: 0 } // Start from top center
     };
 
-    // Fire a couple of slower bursts from the top
-    function shootSlime() {
-        confetti({
-            ...defaults,
-            particleCount: 30, // Fewer particles per burst
-        });
-    }
-
-    setTimeout(shootSlime, 0); // Starts immediately
-    setTimeout(shootSlime, 200); // Reduced delay for second burst
+    // Fire one larger burst immediately
+    confetti({
+        ...defaults,
+        particleCount: 50, 
+    });
 }
 
 
