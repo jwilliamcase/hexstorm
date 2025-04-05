@@ -59,17 +59,35 @@ h1 {
     font-weight: bold; /* Make player name bold */
 }
 
-/* MODIFIED: Game Container - now just holds canvas */
+/* MODIFIED: Game Container - positioning context */
 #game-container {
+    position: relative; /* Needed for absolute positioning of bg canvas */
+    width: 600px; /* Match CANVAS_WIDTH from JS */
+    height: 550px; /* Match CANVAS_HEIGHT from JS */
     margin-bottom: 15px; /* Space below canvas */
 }
 
+/* New Background Canvas Styling */
+#background-canvas {
+    position: absolute; /* Position relative to game-container */
+    top: 0;
+    left: 0;
+    width: 100%; /* Match game container size */
+    height: 100%; /* Match game container size */
+    z-index: -1; /* Place it behind the game canvas */
+    background-color: #050505; /* Dark background for the starfield */
+    pointer-events: none; /* Prevent mouse interaction */
+}
+
+/* MODIFIED: Main Game Canvas */
 #game-canvas {
     display: block; /* Prevents extra space below canvas */
     border: 2px solid rgba(255, 165, 0, 0.8);
-    background-color: #111111;
+    background-color: transparent; /* Make transparent to see background canvas */
     box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
-    /* Width/Height set in JS */
+    position: relative; /* Ensure it stacks above background */
+    z-index: 1;
+    /* Width/Height set in JS, should match #game-container */
 }
 
 /* MODIFIED: Controls - now below canvas, centered */
@@ -156,11 +174,20 @@ h1 {
         padding: 3px 6px;
     }
 
-    /* Allow canvas element to scale down */
-    #game-canvas {
+    /* Adjust game container for smaller screens */
+    #game-container {
+        width: 95%; /* Use percentage width */
+        max-width: 600px; /* Limit max size */
+        height: auto; /* Adjust height based on aspect ratio */
+        /* We might need JS to adjust canvas sizes for responsiveness */
+    }
+
+    /* Allow canvas elements to scale down */
+    #game-canvas,
+    #background-canvas {
         max-width: 100%; /* Ensure canvas doesn't overflow its container */
         height: auto;   /* Maintain aspect ratio */
-        /* The actual drawing inside remains 600x550, but the element scales */
+        /* The actual drawing inside remains fixed, but the element scales */
     }
 
     /* Enlarge color buttons */

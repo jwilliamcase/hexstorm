@@ -28,7 +28,7 @@ let gameState = {
         player1: { id: null, socketId: null, score: 0, startHex: null, color: null },
         player2: { id: null, socketId: null, score: 0, startHex: null, color: null }
     },
-    turn: null,
+    turn: null, // Turn will be set randomly when game starts
     gameStarted: false,
     winner: null
 };
@@ -43,6 +43,7 @@ function initializeGame() {
     gameState.board = {};
     gameState.winner = null;
     gameState.gameStarted = false; // Will be set to true when 2 players join
+    gameState.turn = null; // Reset turn, will be set in startGame
     const usedColors = new Set();
 
     const startCoords = [
@@ -88,10 +89,10 @@ function initializeGame() {
     }
     gameState.players.player1.score = 1;
     gameState.players.player2.score = 1;
-    gameState.turn = 'player1'; // Player 1 starts
-    console.log("Game state initialized.");
+    // gameState.turn = 'player1'; // REMOVED: Player 1 no longer starts by default
+    console.log("Game state initialized (turn not set yet).");
 
-    // If both players are already connected from a previous game, start immediately
+    // If both players are already connected from a previous game, attempt to start
     if (gameState.players.player1.socketId && gameState.players.player2.socketId) {
          startGame();
     }
@@ -184,12 +185,18 @@ function floodFill(playerNumber, targetColor) {
     return player.score;
 }
 
-/** Sets gameStarted to true and notifies clients */
+/** Sets gameStarted to true, randomly assigns the first turn, and notifies clients */
 function startGame() {
+    // Ensure game hasn't started and both players are connected
     if (!gameState.gameStarted && gameState.players.player1.socketId && gameState.players.player2.socketId) {
+        // Randomly select starting player
+        gameState.turn = Math.random() < 0.5 ? 'player1' : 'player2';
+        console.log(`Randomly selected ${gameState.turn} to start.`);
+
         gameState.gameStarted = true;
         console.log("Both players connected. Starting game.");
-        // Broadcast initial state to start the game on clients
+
+        // Broadcast initial state (including the randomized turn) to start the game on clients
         io.emit('gameState', gameState);
     }
 }
@@ -213,7 +220,6 @@ io.on('connection', (socket) => {
         console.log(`Assigned ${socket.id} to player2`);
     } else {
         console.log(`Spectator connected: ${socket.id}`);
-        // Handle spectators if desired (e.g., send game state but don't assign player)
         socket.emit('spectator', true); // Inform client they are spectator
     }
 
@@ -222,9 +228,10 @@ io.on('connection', (socket) => {
     }
 
     // Send current game state to the new client
+    // If game hasn't started, this will show the initial board but turn might be null
     socket.emit('gameState', gameState);
 
-    // Check if game can start
+    // Check if game can start (will randomize turn and set gameStarted=true)
     startGame();
 
 
@@ -239,15 +246,13 @@ io.on('connection', (socket) => {
 
         if (!gameState.gameStarted) {
              console.log(`Move received before game started from ${playerNumber}.`);
-             // Optionally send an error message back
-             // socket.emit('gameError', { message: "Game has not started yet." });
+             socket.emit('gameError', { message: "Game has not started yet." });
              return;
         }
 
         if (gameState.turn !== playerNumber) {
             console.log(`Move received from ${playerNumber} but it's ${gameState.turn}'s turn.`);
-             // Optionally send an error message back
-             // socket.emit('gameError', { message: "It's not your turn." });
+             socket.emit('gameError', { message: "It's not your turn." });
             return;
         }
 
@@ -262,7 +267,6 @@ io.on('connection', (socket) => {
         if (newScore > totalHexes / 2) {
             gameState.winner = playerNumber;
             console.log(`Player ${playerNumber} wins!`);
-            // Resetting or stopping the game state update might happen here
         }
 
 
@@ -293,11 +297,11 @@ io.on('connection', (socket) => {
         if (playerNumber) {
             console.log(`Player ${playerNumber} disconnected.`);
             gameState.players[playerNumber].socketId = null; // Clear the socket ID
-            // TODO: Handle game interruption (e.g., declare other player winner, pause game, reset)
-            // Simple reset for now if a player leaves mid-game
+
+            // Reset if a player leaves mid-game
             if (gameState.gameStarted && !gameState.winner) {
                  console.log("A player disconnected mid-game. Resetting.");
-                 // Notify remaining player?
+                 // Notify remaining player
                  const otherPlayer = playerNumber === 'player1' ? 'player2' : 'player1';
                  const otherSocketId = gameState.players[otherPlayer]?.socketId;
                  if(otherSocketId) {
@@ -307,9 +311,19 @@ io.on('connection', (socket) => {
                  initializeGame();
                  // Broadcast the reset state
                  io.emit('gameState', gameState);
-            } else if (!gameState.gameStarted) {
-                // If game hadn't started, just clear the slot
-                console.log("Player disconnected before game started.");
+            } else {
+                 // If game hadn't started or was over, just clear the slot
+                 console.log("Player disconnected (game not active or already finished).");
+                 // If the game *was* waiting to start, we need to reset gameStarted and turn
+                 if (!gameState.players.player1.socketId || !gameState.players.player2.socketId) {
+                     gameState.gameStarted = false;
+                     gameState.turn = null;
+                     // Notify the remaining player they are waiting again
+                     const remainingPlayer = gameState.players.player1.socketId ? 'player1' : (gameState.players.player2.socketId ? 'player2' : null);
+                     if (remainingPlayer) {
+                         io.to(gameState.players[remainingPlayer].socketId).emit('gameState', gameState); // Send updated state (gameStarted=false)
+                     }
+                 }
             }
         } else {
             console.log("Spectator disconnected.");
