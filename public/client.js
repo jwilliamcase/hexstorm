@@ -21,7 +21,13 @@ let player2ScoreSpan = null;
 // --- Hex Starfield Animation State ---
 let hexStars = [];
 const NUM_STARS = 150;
-const STAR_COLORS = ['rgba(255, 215, 0, 0.7)', 'rgba(255, 165, 0, 0.6)', 'rgba(200, 200, 255, 0.5)', 'rgba(150, 150, 200, 0.4)'];
+// New Red/Blue color palette
+const STAR_COLORS = [
+    'rgba(255, 50, 50, 0.7)',  // Brighter Red
+    'rgba(100, 100, 255, 0.6)', // Brighter Blue
+    'rgba(200, 0, 0, 0.5)',    // Darker Red
+    'rgba(50, 50, 200, 0.4)'     // Darker Blue
+];
 let lastStarTimestamp = 0;
 
 // --- Capture Wave Animation State ---
@@ -45,6 +51,11 @@ const WIN_ANIMATION_DURATION = 4000; // ms
 let loseColorsApplied = false;
 const LOSE_COLOR = '#8B4513';
 const LOSE_COLOR_ALT = '#A0522D';
+
+// --- Emoji Confetti State ---
+const WIN_EMOJIS = ['🦄', '🌈', '⭐', '✨', '🎉'];
+const LOSE_EMOJIS = ['💩', '🧛', '💀', '👻', '👎'];
+const EMOJI_SCALAR = 6; // Controls emoji size
 
 // --- Constants ---
 const AVAILABLE_COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
@@ -101,12 +112,14 @@ socket.on('gameState', (newState) => {
     previousGameState = gameState;
     gameState = newState;
 
-    let justCaptured = false;
+    let captureOccurred = false;
+    let capturingPlayer = null;
     // Check if a capture just happened (score increased for the player who moved)
     if (!isGameOver && previousGameState && previousGameState.turn && 
         gameState.players[previousGameState.turn] && previousGameState.players[previousGameState.turn] &&
         gameState.players[previousGameState.turn].score > previousGameState.players[previousGameState.turn].score) {
-        justCaptured = previousGameState.turn === playerNumber; // Did *I* just capture?
+        captureOccurred = true;
+        capturingPlayer = previousGameState.turn;
     }
 
     // --- Handle Game Over Start/End --- 
@@ -123,8 +136,10 @@ socket.on('gameState', (newState) => {
         if (!isSpectator) {
             if (isWinner) {
                 startWinAnimationLoop();
+                triggerWinConfetti(); // Trigger win confetti
             } else {
                 applyLoseEffect();
+                triggerLoseConfetti(); // Trigger lose confetti
             }
         }
     } else if (previousGameState?.winner && !newState.winner) {
@@ -142,8 +157,9 @@ socket.on('gameState', (newState) => {
     updateUI(); // Update scores, status messages, buttons
     
     // --- Trigger Capture Wave Animation --- 
-    if (justCaptured && !isGameOver && !isAnimatingWave) {
-        startWaveAnimation(); // Uses global gameState
+    if (captureOccurred && !isGameOver && !isAnimatingWave) {
+        // Start wave animation for the player who captured, visible to all
+        startWaveAnimation(capturingPlayer);
     }
     // --- End Trigger Capture Wave --- 
 
@@ -224,7 +240,7 @@ function updateUI() {
 
     // --- Update Game Status Message --- 
     if (isSpectator) {
-        displayGameStatus(isGameOver ? `${gameState.winner} wins!` : "Spectating game.");
+        displayGameStatus(isGameOver ? `${gameState.winner} wins!` : (isAnimatingWave ? "Capturing..." : "Spectating game."));
     }
     else if (gameStatusDiv && gameStatusDiv.textContent.startsWith('Error:')) {
         // Keep existing error message
@@ -250,6 +266,7 @@ function updateUI() {
 
 // --- Coordinate & Drawing Functions ---
 function axialToPixel(q, r) {
+    // Player 2 view rotation is handled here for drawing
     let drawQ = q, drawR = r;
     if (playerNumber === 'player2') { drawQ = -q; drawR = -r; }
     const x = HEX_SIZE * (Math.sqrt(3) * drawQ + Math.sqrt(3) / 2 * drawR) + ORIGIN_X;
@@ -258,6 +275,7 @@ function axialToPixel(q, r) {
 }
 
 function pixelToAxial(x, y) {
+    // Player 2 view rotation is handled here for input/hover
     let adjustedX = x - ORIGIN_X, adjustedY = y - ORIGIN_Y;
     if (playerNumber === 'player2') { adjustedX = -adjustedX; adjustedY = -adjustedY; }
     const q = (Math.sqrt(3) / 3 * adjustedX - 1. / 3 * adjustedY) / HEX_SIZE;
@@ -313,19 +331,20 @@ function drawHex(hexData, isOwnedByCurrentPlayer, isHovered) {
     let borderColor = '#333333';
     let borderWidth = owner ? 2 : 1;
 
-    if (loseColorsApplied && owner === playerNumber) {
+    // Apply lose effect if applicable (even if not owned by current player)
+    if (loseColorsApplied && owner === (isWinner ? (playerNumber === 'player1' ? 'player2' : 'player1') : playerNumber)) {
         displayColor = (q % 2 === r % 2) ? LOSE_COLOR : LOSE_COLOR_ALT;
         borderColor = '#555555';
         borderWidth = 1.0;
     }
     else if (isOwnedByCurrentPlayer) {
-        borderColor = '#FFFFFF';
+        borderColor = '#FFFFFF'; // Highlight for the local player
         borderWidth = 3.0;
     }
 
     const center = axialToPixel(q, r);
-    // Hover effect disabled during animations
-    const applyHoverEffect = isHovered && owner === playerNumber && !isSpectator && !isGameOver && !isAnimatingWave && !winAnimationId;
+    // Hover effect disabled during animations or if hex not owned by local player
+    const applyHoverEffect = isHovered && isOwnedByCurrentPlayer && !isSpectator && !isGameOver && !isAnimatingWave && !winAnimationId;
     let shadow = null;
     if (applyHoverEffect) {
         shadow = { color: 'rgba(255, 255, 255, 0.7)', blur: 10, offsetX: 0, offsetY: 0 };
@@ -352,7 +371,7 @@ function drawBoard() {
     Object.values(gameState.board).forEach(hexData => {
         if (hexData && typeof hexData.q !== 'undefined' && typeof hexData.r !== 'undefined') {
             const isHovered = hoveredHexKey === `${hexData.q},${hexData.r}`;
-            const isOwnedByCurrentPlayer = hexData.owner === playerNumber;
+            const isOwnedByCurrentPlayer = hexData.owner === playerNumber; // Check if owned by the *local* player
             drawHex(hexData, isOwnedByCurrentPlayer, isHovered);
         } else {
             console.error("DEBUG: drawBoard - Invalid hexData found:", hexData);
@@ -418,17 +437,24 @@ function drawMiniHex(x, y, size, color) {
 function createHexStarfield() {
     hexStars = [];
     for (let i = 0; i < NUM_STARS; i++) {
-        const speedFactor = Math.random() * 0.6 + 0.2;
+        const size = Math.random() * 2.0 + 0.5; // Range 0.5 to 2.5
+        const baseSpeed = Math.random() * 0.6 + 0.2; // Base speed factor
+        // Speed depends on size (larger = faster)
+        const speedFactor = baseSpeed * (size / 1.5); 
+
         hexStars.push({
             x: Math.random() * bgCanvas.width,
             y: Math.random() * bgCanvas.height,
-            size: Math.random() * 1.5 + 1,
-            dx: (Math.random() - 0.5) * 0.5 * speedFactor,
-            dy: (Math.random() * 0.5 + 0.1) * speedFactor,
+            size: size,
+            // Random horizontal direction, speed based on size
+            dx: (Math.random() - 0.5) * 1.0 * speedFactor, 
+            // Random vertical direction (up or down), speed based on size
+            dy: (Math.random() - 0.5) * 1.0 * speedFactor, 
+            // Randomly pick from the new red/blue palette
             color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)]
         });
     }
-    console.log(`Created ${hexStars.length} hex stars.`);
+    console.log(`Created ${hexStars.length} hex stars with parallax.`);
 }
 
 function animateHexStarfield(timestamp) {
@@ -436,16 +462,30 @@ function animateHexStarfield(timestamp) {
     if (lastStarTimestamp === 0) lastStarTimestamp = timestamp;
     const deltaTime = timestamp - lastStarTimestamp;
     lastStarTimestamp = timestamp;
+
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
     hexStars.forEach(star => {
-        star.x += star.dx * (deltaTime / 16.67);
+        // Move star based on its dx, dy and deltaTime
+        star.x += star.dx * (deltaTime / 16.67); // Normalize speed to ~60fps
         star.y += star.dy * (deltaTime / 16.67);
-        if (star.x < -star.size) star.x = bgCanvas.width + star.size;
-        else if (star.x > bgCanvas.width + star.size) star.x = -star.size;
-        if (star.y < -star.size) star.y = bgCanvas.height + star.size;
-        else if (star.y > bgCanvas.height + star.size) star.y = -star.size;
+
+        // Wrap around edges for continuous field
+        if (star.x < -star.size) {
+            star.x = bgCanvas.width + star.size;
+        } else if (star.x > bgCanvas.width + star.size) {
+            star.x = -star.size;
+        }
+        if (star.y < -star.size) {
+            star.y = bgCanvas.height + star.size;
+        } else if (star.y > bgCanvas.height + star.size) {
+            star.y = -star.size;
+        }
+
+        // Draw the hex star
         drawMiniHex(star.x, star.y, star.size, star.color);
     });
+
     requestAnimationFrame(animateHexStarfield);
 }
 
@@ -456,22 +496,23 @@ function getNeighborCoords(q, r) {
     return AXIAL_DIRECTIONS.map(dir => ({ q: q + dir.q, r: r + dir.r }));
 }
 
-function startWaveAnimation() {
-    if (!gameState || !playerNumber || isSpectator) return;
+// Modified to accept capturingPlayerNumber
+function startWaveAnimation(capturingPlayerNumber) {
+    if (!gameState || !capturingPlayerNumber) return; // Need game state and the player who captured
 
-    console.log("Starting capture wave animation.");
+    console.log(`Starting capture wave animation for ${capturingPlayerNumber}.`);
     isAnimatingWave = true;
     waveHexData = [];
     maxWaveDistance = 0;
 
-    const playerState = gameState.players[playerNumber];
+    const playerState = gameState.players[capturingPlayerNumber];
     if (!playerState || !playerState.startHex) {
-        console.error("Cannot start wave: Player state or start hex missing.");
+        console.error(`Cannot start wave: Player state or start hex missing for ${capturingPlayerNumber}.`);
         isAnimatingWave = false;
         return;
     }
 
-    // BFS to calculate distances from start hex through owned territory
+    // BFS to calculate distances from start hex through owned territory of the capturing player
     const startCoordsArr = playerState.startHex.split(',').map(Number);
     const startQ = startCoordsArr[0];
     const startR = startCoordsArr[1];
@@ -488,8 +529,8 @@ function startWaveAnimation() {
         const neighbors = getNeighborCoords(q, r);
         for (const neighbor of neighbors) {
             const neighborKey = `${neighbor.q},${neighbor.r}`;
-            // Check if neighbor exists, is owned by player, and not visited
-            if (gameState.board[neighborKey] && gameState.board[neighborKey].owner === playerNumber && !visited.has(neighborKey)) {
+            // Check if neighbor exists, is owned by the *capturing* player, and not visited
+            if (gameState.board[neighborKey] && gameState.board[neighborKey].owner === capturingPlayerNumber && !visited.has(neighborKey)) {
                 visited.add(neighborKey);
                 const neighborData = { q: neighbor.q, r: neighbor.r, distance: distance + 1 };
                 waveHexData.push(neighborData);
@@ -499,7 +540,7 @@ function startWaveAnimation() {
     }
 
     if (waveHexData.length <= 1) { // Only start hex? Don't animate.
-        console.log("No territory to animate wave over.");
+        console.log(`No territory to animate wave over for ${capturingPlayerNumber}.`);
         isAnimatingWave = false;
         drawBoard();
         return;
@@ -615,8 +656,9 @@ function winAnimationStep(timestamp) {
     ctx.strokeStyle = `rgba(255, 215, 0, ${glowAlpha})`;
     ctx.lineWidth = lineWidth;
 
+    // Animate only the local winner's hexes
     Object.values(gameState.board).forEach(hexData => {
-        if (hexData.owner === playerNumber) {
+        if (hexData.owner === playerNumber) { // Only for local winner
             const center = axialToPixel(hexData.q, hexData.r);
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
@@ -630,6 +672,72 @@ function winAnimationStep(timestamp) {
     });
 
     winAnimationId = requestAnimationFrame(winAnimationStep);
+}
+
+// --- Emoji Confetti Functions ---
+function triggerWinConfetti() {
+    if (typeof confetti !== 'function') {
+        console.warn("Confetti library not loaded.");
+        return;
+    }
+    console.log("Triggering WIN confetti");
+
+    const emojiShapes = WIN_EMOJIS.map(text => confetti.shapeFromText({ text, scalar: EMOJI_SCALAR }));
+
+    const defaults = {
+        spread: 360,
+        ticks: 70, 
+        gravity: 0.2,
+        decay: 0.94,
+        startVelocity: 35,
+        shapes: emojiShapes,
+        scalar: EMOJI_SCALAR 
+    };
+
+    // Fire multiple bursts for a more impactful effect
+    function shootBurst() {
+        confetti({
+            ...defaults,
+            particleCount: 35, // Reduced particles
+            origin: { x: Math.random(), y: Math.random() * 0.5 } // Random origin near top
+        });
+    }
+
+    setTimeout(shootBurst, 0);
+    setTimeout(shootBurst, 150);
+    setTimeout(shootBurst, 300); // Reduced to 3 bursts
+}
+
+function triggerLoseConfetti() {
+    if (typeof confetti !== 'function') {
+        console.warn("Confetti library not loaded.");
+        return;
+    }
+    console.log("Triggering LOSE confetti (slime)");
+
+    const emojiShapes = LOSE_EMOJIS.map(text => confetti.shapeFromText({ text, scalar: EMOJI_SCALAR }));
+
+    const defaults = {
+        spread: 90, // Narrower spread for downward motion
+        ticks: 350, // Longer duration for falling effect
+        gravity: 0.6, // Stronger gravity
+        decay: 0.96,
+        startVelocity: 25, // Increased start velocity
+        shapes: emojiShapes,
+        scalar: EMOJI_SCALAR,
+        origin: { x: 0.5, y: 0 } // Start from top center
+    };
+
+    // Fire a couple of slower bursts from the top
+    function shootSlime() {
+        confetti({
+            ...defaults,
+            particleCount: 30, // Fewer particles per burst
+        });
+    }
+
+    setTimeout(shootSlime, 0); // Starts immediately
+    setTimeout(shootSlime, 200); // Reduced delay for second burst
 }
 
 

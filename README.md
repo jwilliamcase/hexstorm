@@ -4,9 +4,10 @@ A real-time two-player territory capture game played on a hexagonal board. Playe
 
 ## Game Specification
 
-*   **Board:** A hexagonal grid of a defined size (currently 6-radius hex).
+*   **Board:** A hexagonal grid of a defined size (currently **7-radius** hex).
 *   **Players:** Two players, Player 1 and Player 2.
 *   **Starting Positions:** Player 1 starts controlling the bottom-left corner hex. Player 2 starts controlling the top-right corner hex.
+*   **Starting Turn:** The game waits for both players to connect. The starting player is then **randomly chosen**.
 *   **Objective:** Control more than half of the hexes on the board.
 *   **Gameplay:**
     *   Players take turns selecting a color from the available options.
@@ -20,20 +21,26 @@ A real-time two-player territory capture game played on a hexagonal board. Playe
 *   **Backend:** Node.js, Express, Socket.IO
 *   **Frontend:** HTML, CSS, JavaScript (Canvas API), Socket.IO Client
 
-## Current Status (April 4, 2024 - Update)
+## Current Status (April 5, 2024 - Update)
 
 *   **Core Gameplay:** Implemented and functional. Players can connect, take turns, select colors, and capture territory via flood fill.
 *   **Real-time Sync:** Game state is synchronized between server and clients using Socket.IO.
 *   **Win Condition:** Game correctly detects when a player controls > 50% of the hexes and declares a winner.
 *   **Game Reset:** The game automatically resets a few seconds after a winner is declared.
 *   **Player Assignment:** Server assigns players as Player 1, Player 2, or Spectator upon connection.
+*   **Random Start:** Server waits for both players and randomly assigns the first turn.
+*   **Board Size:** Increased board radius from 6 to **7**.
 *   **UI:**
-    *   Canvas rendering of the hex board (size increased to radius 6).
+    *   Canvas rendering of the hex board.
     *   Info bar above canvas displays player scores and highlights the active player.
     *   Color selection buttons below canvas are dynamically enabled/disabled based on game state and rules.
     *   Implemented a "dark mode" theme with black background and orange UI elements.
     *   Player 2's view is rotated 180 degrees so their starting corner appears in the lower-left on their screen.
     *   Hexes owned by the current player have a persistent white border for better visibility.
+*   **Visual Effects:**
+    *   Replaced static background with a dynamic canvas-based hex starfield animation.
+    *   Added win/lose effects: Winner's territory glows, loser's territory desaturates to brown/grey.
+    *   Implemented a capture "wave" animation: Effect emanates from the start hex through owned territory upon capture.
 *   **Debugging:** Added console logs for troubleshooting state updates and rendering.
 *   **Development:** Added `nodemon` for automatic server restarts during local development (`npm run dev`).
 
@@ -104,8 +111,7 @@ Render.com can host Node.js web services. Here's a basic guide:
     *   Different game modes (e.g., limited turns, score-based victory).
     *   Special hex types (e.g., obstacles, bonus points).
 *   **UI/UX:**
-    *   Smoother animations for flood fill.
-    *   Visual feedback for invalid moves.
+    *   Visual feedback for invalid moves (e.g., shaking the button).
     *   Mobile responsiveness improvements.
     *   Spectator chat.
 *   **Persistence:**
@@ -116,4 +122,14 @@ Render.com can host Node.js web services. Here's a basic guide:
     *   Add automated tests (unit/integration).
     *   Implement more robust error handling and logging.
     *   Code linting/formatting enforcement.
-
+    *   **Optimizations:**
+        *   Reduce canvas redraw frequency where possible (e.g., only redraw affected areas).
+        *   Optimize BFS calculations (though likely not a bottleneck currently).
+        *   Refine server-side validation logic.
+        *   Investigate client-side state management for potential improvements.
+    *   **Technical Debt:**
+        *   **Lack of Tests:** No automated tests exist, increasing risk of regressions.
+        *   **Magic Numbers/Strings:** Some values (e.g., animation timings, colors) are hardcoded; could be constants or configuration.
+        *   **CSS Structure:** `style.css` could potentially be better organized or use a preprocessor.
+        *   **Client State:** Client-side state management is basic; could become complex. Consider a lightweight state library if features grow significantly.
+        *   **Error Handling:** Client/Server error handling is basic; could be more user-friendly and informative.
