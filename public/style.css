@@ -84,7 +84,7 @@ h1 {
     display: block; /* Prevents extra space below canvas */
     border: 2px solid rgba(255, 165, 0, 0.8);
     background-color: transparent; /* Make transparent to see background canvas */
-    box-shadow: 0 0 15px rgba(255, 165, 0, 0.5);
+    filter: drop-shadow(5px 5px 10px rgba(0, 0, 0, 0.7));
     position: relative; /* Ensure it stacks above background */
     z-index: 1;
     /* Width/Height set in JS, should match #game-container */
