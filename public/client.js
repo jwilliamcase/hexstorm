@@ -59,6 +59,16 @@ const WIN_EMOJIS = ['🦄', '🌈', '⭐', '✨', '🎉'];
 const LOSE_EMOJIS = ['💩', '🧛', '💀', '👻', '💩']; // Replaced thumbs down
 const EMOJI_SCALAR = 6; // Controls emoji size
 
+// --- Audio Assets ---
+const soundPlayerJoined = new Audio('/sounds/player_join.mp3');
+const soundColorSelect = new Audio('/sounds/color_select.mp3');
+const soundTileTap = new Audio('/sounds/tile_tap.mp3');
+
+// Optional: Set volume for sounds if needed
+// soundPlayerJoined.volume = 0.5;
+// soundColorSelect.volume = 0.7;
+// soundTileTap.volume = 0.4;
+
 // --- Constants ---
 const AVAILABLE_COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
 const HEX_SIZE = 20;
@@ -156,6 +166,14 @@ socket.on('gameState', (newState) => {
         waveAnimationId = null;
     }
     // --- End Handle Game Over ---
+
+    const wasGameStarted = previousGameState?.gameStarted ?? false;
+
+    // Play player joined/game start sound
+    if (!wasGameStarted && newState.gameStarted && newState.players.player1.socketId && newState.players.player2.socketId) {
+        console.log("Game is starting with both players, playing join sound.");
+        soundPlayerJoined.play().catch(e => console.error("Error playing player join sound:", e));
+    }
 
     updateUI(); // Update scores, status messages, buttons
     
@@ -387,6 +405,7 @@ function selectColor(color) {
     // Disable actions during animations or game over
     if (isSpectator || !gameState || !gameState.gameStarted || gameState.winner || gameState.turn !== playerNumber || isGameOver || isAnimatingWave) return;
     console.log(`Sending move: ${color}`);
+    soundColorSelect.play().catch(e => console.error("Error playing color select sound:", e));
     socket.emit('playerMove', { color: color });
 }
 
@@ -525,7 +544,7 @@ function startWaveAnimation(capturingPlayerNumber) {
 
     const queue = [{ q: startQ, r: startR, distance: 0 }];
     const visited = new Set([playerState.startHex]);
-    waveHexData.push({ q: startQ, r: startR, distance: 0 });
+    waveHexData.push({ q: startQ, r: startR, distance: 0, soundPlayed: false });
 
     let head = 0;
     while (head < queue.length) {
@@ -538,9 +557,9 @@ function startWaveAnimation(capturingPlayerNumber) {
             // Check if neighbor exists, is owned by the *capturing* player, and not visited
             if (gameState.board[neighborKey] && gameState.board[neighborKey].owner === capturingPlayerNumber && !visited.has(neighborKey)) {
                 visited.add(neighborKey);
-                const neighborData = { q: neighbor.q, r: neighbor.r, distance: distance + 1 };
+                const neighborData = { q: neighbor.q, r: neighbor.r, distance: distance + 1, soundPlayed: false };
                 waveHexData.push(neighborData);
-                queue.push(neighborData);
+                queue.push({ q: neighbor.q, r: neighbor.r, distance: distance + 1 }); // Queue only needs q,r,distance for BFS
             }
         }
     }
@@ -580,6 +599,13 @@ function waveAnimationStep(timestamp) {
 
         // Check if the hex is within the current wave band
         if (diff >= 0 && diff < WAVE_WIDTH) {
+            // Play sound if not already played for this hex in this wave
+            if (!hex.soundPlayed) { // Corrected to use 'hex'
+                soundTileTap.currentTime = 0;
+                soundTileTap.play().catch(e => console.error("Error playing tile tap sound:", e));
+                hex.soundPlayed = true; // Corrected to use 'hex'
+            }
+
             // Calculate intensity (0 to 1, peaks in middle of wave band)
             const wavePosition = diff / WAVE_WIDTH; // 0 (leading edge) to 1 (trailing edge)
             const intensity = Math.sin(wavePosition * Math.PI); // Simple sine pulse (0 -> 1 -> 0)
