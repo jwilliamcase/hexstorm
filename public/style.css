@@ -118,7 +118,7 @@ h1 {
 #color-buttons-container button {
     width: 45px; /* Fixed width */
     height: 45px;
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid #003049;
     border-radius: 5px; /* Slightly more rounded */
     cursor: pointer;
     transition: all 0.2s ease;

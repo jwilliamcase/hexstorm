@@ -70,7 +70,7 @@ const soundTileTap = new Audio('/sounds/tile_tap.mp3');
 // soundTileTap.volume = 0.4;
 
 // --- Constants ---
-const AVAILABLE_COLORS = ['#780000', '#c1121f', '#fdf0d5', '#003049', '#669bbc', '#000000'];
+const AVAILABLE_COLORS = ['#780000', '#c1121f', '#D2B48C', '#003049', '#669bbc', '#000000'];
 const HEX_SIZE = 20;
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 550;
