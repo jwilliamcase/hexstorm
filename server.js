@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 // --- Game Constants ---
 const BOARD_RADIUS = 7;
-const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
+const COLORS = ['#780000', '#c1121f', '#fdf0d5', '#003049', '#669bbc', '#000000'];
 const PLAYER_IDS = ['player1', 'player2'];
 // Axial directions (q, r) for neighbors
 const AXIAL_DIRECTIONS = [

@@ -5,14 +5,14 @@ body {
     align-items: center;
     margin: 0;
     padding: 20px;
-    background-color: #000000; /* Black background */
-    color: #FFA500; /* Orange text */
+    background-color: #fdf0d5; /* Light Beige background */
+    color: #003049; /* Dark Blue text */
 }
 
 h1 {
     margin-bottom: 15px; /* Reduced margin */
-    color: #FFD700; /* Gold color for title */
-    text-shadow: 1px 1px 3px rgba(255, 165, 0, 0.7); /* Orange glow */
+    color: #780000; /* Dark Red color for title */
+    text-shadow: 1px 1px 3px rgba(193, 18, 31, 0.7); /* Red glow */
 }
 
 /* NEW: Info Bar Styling */
@@ -23,8 +23,8 @@ h1 {
     width: 500px; /* Match canvas width */
     padding: 5px 10px; /* Add some padding */
     margin-bottom: 10px; /* Space below info bar */
-    background-color: rgba(255, 165, 0, 0.1); /* Very light orange tint */
-    border: 1px solid rgba(255, 165, 0, 0.3);
+    background-color: rgba(0, 48, 73, 0.1); /* Very light Dark Blue tint */
+    border: 1px solid rgba(0, 48, 73, 0.3);
     border-radius: 4px;
     box-sizing: border-box; /* Include padding/border in width */
 }
@@ -40,7 +40,7 @@ h1 {
 
 .player-info .score {
     font-weight: bold;
-    color: #FFD700; /* Gold for scores */
+    color: #c1121f; /* Red for scores */
     margin-left: 5px; /* Space between label and score */
 }
 
@@ -54,8 +54,8 @@ h1 {
 
 /* NEW: Active Player Highlight */
 .player-info.active-player {
-    border-color: #FFD700; /* Gold border */
-    background-color: rgba(255, 215, 0, 0.2); /* Light gold background */
+    border-color: #780000; /* Dark Red border */
+    background-color: rgba(120, 0, 0, 0.2); /* Light Dark Red background */
     font-weight: bold; /* Make player name bold */
 }
 
@@ -75,14 +75,14 @@ h1 {
     width: 100%; /* Match game container size */
     height: 100%; /* Match game container size */
     z-index: -1; /* Place it behind the game canvas */
-    background-color: #050505; /* Dark background for the starfield */
+    background-color: #003049; /* Dark Blue background for the starfield */
     pointer-events: none; /* Prevent mouse interaction */
 }
 
 /* MODIFIED: Main Game Canvas */
 #game-canvas {
     display: block; /* Prevents extra space below canvas */
-    border: 2px solid rgba(255, 165, 0, 0.8);
+    border: 2px solid rgba(0, 48, 73, 0.8);
     background-color: transparent; /* Make transparent to see background canvas */
     filter: drop-shadow(5px 5px 10px rgba(0, 0, 0, 0.7));
     position: relative; /* Ensure it stacks above background */

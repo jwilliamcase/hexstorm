@@ -70,7 +70,7 @@ const soundTileTap = new Audio('/sounds/tile_tap.mp3');
 // soundTileTap.volume = 0.4;
 
 // --- Constants ---
-const AVAILABLE_COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#FFD700', '#8A2BE2'];
+const AVAILABLE_COLORS = ['#780000', '#c1121f', '#fdf0d5', '#003049', '#669bbc', '#000000'];
 const HEX_SIZE = 20;
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 550;
@@ -254,8 +254,8 @@ function updateUI() {
     player2InfoDiv.classList.toggle('active-player', gameState.gameStarted && !gameState.winner && gameState.turn === 'player2' && !isGameOver && !isAnimatingWave);
     const p1IdSpan = player1InfoDiv.querySelector('.player-id');
     const p2IdSpan = player2InfoDiv.querySelector('.player-id');
-    p1IdSpan.textContent = (playerNumber === 'player1') ? '(You)' : '';
-    p2IdSpan.textContent = (playerNumber === 'player2') ? '(You)' : '';
+    p1IdSpan.textContent = '';
+    p2IdSpan.textContent = '';
     
     updateColorButtons(); // Update buttons based on turn and colors
 
@@ -349,7 +349,7 @@ function drawHexShape(center, size, color, borderColor = '#333333', borderWidth 
 function drawHex(hexData, isOwnedByCurrentPlayer, isHovered) {
     const { q, r, owner } = hexData;
     let displayColor = hexData.color;
-    let borderColor = '#333333';
+    let borderColor = '#fdf0d5';
     let borderWidth = owner ? 2 : 1;
 
     // Apply lose effect if applicable (even if not owned by current player)
